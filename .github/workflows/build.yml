@@ -1,0 +1,71 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: telemost-app 
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: telemost-linux
+            asset_name: telemost-linux
+          - os: windows-latest
+            artifact_name: telemost-windows
+            asset_name: telemost-windows.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Dependencies (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            libssl-dev \
+            libdbus-1-dev \
+            pkg-config
+
+      - name: Build Release
+        run: cargo build --release
+
+      - name: Prepare Artifact (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cd target/release
+          mv ${{ env.BINARY_NAME }} ${{ matrix.asset_name }}
+
+      - name: Prepare Artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd target/release
+          rename ${{ env.BINARY_NAME }}.exe ${{ matrix.asset_name }}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            target/release/${{ matrix.asset_name }}
